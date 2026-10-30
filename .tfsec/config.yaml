@@ -1,0 +1,66 @@
+# tfsec Configuration for GamePlatform Terraform
+# Security scanning configuration with customized rules
+
+# Severity levels to include
+severity: 
+  - CRITICAL
+  - HIGH
+  - MEDIUM
+  - LOW
+
+# Output formats
+format: 
+  - json
+  - sarif
+  - markdown
+
+# Custom checks configuration
+checks:
+  # Enable all AWS checks
+  - aws-*
+  
+  # Custom exclusions for development environments
+exclude_checks:
+  # Allow HTTP listeners for dev environments (will be handled contextually)
+  - aws-elb-alb-not-public  # We need public ALB for our architecture
+  
+# Minimum severity for failures
+minimum_severity: HIGH
+
+# Custom rules directory (if we create custom rules)
+include_paths:
+  - "custom-rules/"
+
+# Directories to exclude from scanning
+exclude_paths:
+  - ".terraform/"
+  - "**/.terraform/"
+  - "**/node_modules/"
+  - "**/*.tfvars"  # Don't scan variable files for secrets
+
+# Enable detailed output
+verbose: true
+
+# Force color output in CI
+force_colors: true
+
+# Enable statistics
+statistics: true
+
+# Custom configuration for specific AWS services
+aws:
+  # S3 configurations
+  s3:
+    force_destroy_allowed: false  # Prevent accidental data loss
+    
+  # IAM configurations  
+  iam:
+    wildcard_actions_allowed: false
+    
+  # ECS configurations
+  ecs:
+    enable_logging: true
+    
+  # ALB configurations
+  alb:
+    enable_access_logs: true

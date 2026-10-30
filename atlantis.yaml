@@ -1,0 +1,203 @@
+# Atlantis Configuration for GamePlatform Terraform
+# Integrates tfsec security scanning and infracost analysis
+
+version: 3
+
+# Atlantis server configuration
+automerge: false  # Require manual approval for production changes
+delete_source_branch_on_merge: false
+
+# Projects configuration
+projects:
+  # PR Ephemeral environments are now managed by monorepo
+  # See gameplatform-monorepo/atlantis.yaml for ephemeral environment configuration
+    
+  # Shared Infrastructure - Networking
+  - name: shared-infrastructure-networking
+    dir: ../gameplatform-shared-infrastructure/networking/
+    workspace: default
+    autoplan:
+      enabled: true
+      when_modified: ["*.tf", "*.tfvars"]
+    apply_requirements:
+      - approved
+      - mergeable
+    workflow: gameplatform-shared-workflow
+    
+  # Shared Infrastructure - DNS & ALB  
+  - name: shared-infrastructure-dns-alb
+    dir: ../gameplatform-shared-infrastructure/dns-and-alb/
+    workspace: default
+    autoplan:
+      enabled: true
+      when_modified: ["*.tf", "*.tfvars"]
+    apply_requirements:
+      - approved 
+      - mergeable
+    workflow: gameplatform-shared-workflow
+
+# Custom workflows with security and cost analysis
+workflows:
+  # Workflow for ephemeral environments (fast, minimal checks)
+  gameplatform-ephemeral-workflow:
+    plan:
+      steps:
+        - init:
+            extra_args: ["-upgrade"]
+        - plan:
+            extra_args: ["-out=tfplan"]
+        - run: |
+            echo "🚀 Ephemeral environment plan completed"
+            echo "💰 Estimated cost: ~$5-10 USD per day"
+            echo "🗑️ Auto-cleanup when PR closes"
+    apply:
+      steps:
+        - apply:
+            extra_args: ["tfplan"]
+        - run: |
+            echo "✅ Ephemeral environment deployed!"
+            echo "📍 Environment URL: https://$(basename $(pwd)).dev.gameplatform.click"
+            echo "📍 Lobby URL: https://lobby-$(basename $(pwd)).dev.gameplatform.click"
+            
+  # Workflow for PR template development  
+  gameplatform-pr-workflow:
+    plan:
+      steps:
+        # Standard terraform plan
+        - init:
+            extra_args: ["-upgrade"]
+        - plan:
+            extra_args: ["-out=tfplan"]
+            
+        # Security scanning with tfsec
+        - run: |
+            echo "🛡️ Running tfsec security analysis..."
+            tfsec . \
+              --config-file=../../.tfsec/config.yaml \
+              --format=json \
+              --out=tfsec-results.json \
+              --format=markdown \
+              --out=tfsec-results.md \
+              --force-all-dirs \
+              --minimum-severity=MEDIUM || echo "⚠️ Security issues found - check report"
+              
+        # Cost analysis with infracost  
+        - run: |
+            echo "💰 Running infracost analysis..."
+            infracost breakdown \
+              --config-file=../../.infracost/config.yml \
+              --usage-file=../../.infracost/usage.yml \
+              --path=. \
+              --format=json \
+              --out-file=infracost-results.json
+            
+            infracost breakdown \
+              --config-file=../../.infracost/config.yml \
+              --usage-file=../../.infracost/usage.yml \
+              --path=. \
+              --format=table \
+              --out-file=infracost-results.txt
+              
+        # Generate comprehensive report
+        - run: |
+            echo "📊 Generating comprehensive report..."
+            bash ../../scripts/generate-pr-report.sh \
+              "$(pwd)" \
+              "$(basename $(pwd))" \
+              "$ATLANTIS_PULL_NUM" \
+              "$ATLANTIS_PULL_AUTHOR"
+              
+    apply:
+      steps:
+        - apply:
+            extra_args: ["tfplan"]
+        - run: |
+            echo "✅ Applied successfully! Generating deployment summary..."
+            bash ../../scripts/generate-deployment-summary.sh \
+              "$(pwd)" \
+              "$(basename $(pwd))" \
+              "$ATLANTIS_PULL_NUM"
+
+  # Workflow for shared infrastructure (more rigorous checks)
+  gameplatform-shared-workflow:
+    plan:
+      steps:
+        # Standard terraform plan
+        - init:
+            extra_args: ["-upgrade"]
+        - plan:
+            extra_args: ["-out=tfplan", "-detailed-exitcode"]
+            
+        # Enhanced security scanning for shared infrastructure
+        - run: |
+            echo "🛡️ Running enhanced tfsec security analysis for shared infrastructure..."
+            tfsec . \
+              --config-file=../../.tfsec/config.yaml \
+              --format=json \
+              --out=tfsec-results.json \
+              --format=markdown \
+              --out=tfsec-results.md \
+              --force-all-dirs \
+              --minimum-severity=HIGH \
+              --soft-fail=false  # Fail on HIGH+ security issues
+              
+        # Enhanced cost analysis for shared infrastructure
+        - run: |
+            echo "💰 Running enhanced infracost analysis for shared infrastructure..."
+            infracost breakdown \
+              --config-file=../../.infracost/config.yml \
+              --usage-file=../../.infracost/usage.yml \
+              --path=. \
+              --format=json \
+              --out-file=infracost-results.json
+              
+            # Check against cost thresholds
+            bash ../../scripts/check-cost-thresholds.sh \
+              "infracost-results.json" \
+              "shared-infrastructure"
+              
+        # Policy validation
+        - run: |
+            echo "📋 Running policy validation..."
+            bash ../../scripts/validate-infrastructure-policies.sh "$(pwd)"
+            
+        # Generate comprehensive report
+        - run: |
+            echo "📊 Generating comprehensive shared infrastructure report..."
+            bash ../../scripts/generate-shared-infra-report.sh \
+              "$(pwd)" \
+              "$(basename $(pwd))" \
+              "$ATLANTIS_PULL_NUM" \
+              "$ATLANTIS_PULL_AUTHOR"
+              
+    apply:
+      steps:
+        - apply:
+            extra_args: ["tfplan"]
+        - run: |
+            echo "✅ Shared infrastructure applied successfully!"
+            bash ../../scripts/generate-shared-deployment-summary.sh \
+              "$(pwd)" \
+              "$(basename $(pwd))" \
+              "$ATLANTIS_PULL_NUM"
+
+# Global apply requirements
+apply_requirements:
+  - approved
+  - mergeable
+
+# Parallel operations
+parallel_plan: true
+parallel_apply: false  # Sequential apply for safety
+
+# Allowed override options
+allowed_overrides:
+  - apply_requirements
+  - workflow
+
+# Disable apply all to prevent accidental bulk changes  
+disable_apply_all: true
+
+# Auto discover projects
+auto_discover:
+  mode: auto

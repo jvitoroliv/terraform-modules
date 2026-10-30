@@ -1,0 +1,80 @@
+# Infracost Configuration for GamePlatform Terraform
+# Cost estimation and policies configuration
+
+version: 0.1
+
+# Currency settings
+currency: USD
+
+# Projects configuration
+projects:
+  - path: .
+    name: gameplatform-terraform
+    
+# Pricing API settings
+pricing_api_endpoint: https://pricing.api.infracost.io
+
+# Enable usage-based costs
+enable_dashboard: true
+
+# Cost policies and thresholds
+policies:
+  # Maximum monthly cost thresholds by environment
+  cost_thresholds:
+    dev:
+      max_monthly_cost: 500    # $500/month for dev
+      warning_threshold: 400   # Warning at $400/month
+    stg:
+      max_monthly_cost: 1000   # $1000/month for staging
+      warning_threshold: 800   # Warning at $800/month
+    prd:
+      max_monthly_cost: 5000   # $5000/month for production
+      warning_threshold: 4000  # Warning at $4000/month
+
+  # Resource-specific policies
+  resources:
+    # NAT Gateway costs (major cost driver)
+    nat_gateway:
+      max_count_per_env:
+        dev: 1      # Single NAT for dev
+        stg: 2      # Limited NAT for staging
+        prd: 3      # Full HA for production
+        
+    # ECS costs
+    ecs:
+      max_fargate_cpu_per_service: 2048  # 2 vCPU max per service
+      max_fargate_memory_per_service: 4096  # 4GB max per service
+      
+    # ALB costs
+    alb:
+      max_albs_per_env: 1  # Use shared ALB pattern
+      
+    # RDS costs (for future database resources)
+    rds:
+      allowed_instance_types:
+        dev: ["db.t3.micro", "db.t3.small"]
+        stg: ["db.t3.small", "db.t3.medium"] 
+        prd: ["db.t3.medium", "db.t3.large", "db.r5.large"]
+
+# Output configuration
+output:
+  format: table
+  show_skipped: false
+  
+# Usage file for more accurate estimates
+usage_file: .infracost/usage.yml
+
+# Fields to include in output
+fields:
+  - price
+  - monthlyQuantity
+  - unit
+  - hourlyCost
+  - monthlyCost
+
+# Breakdown configuration
+breakdown:
+  include_all_paths: true
+  exclude_paths:
+    - "**/.terraform/**"
+    - "**/node_modules/**"

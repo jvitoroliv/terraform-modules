@@ -1,0 +1,73 @@
+# Infracost Usage File for GamePlatform
+# Define usage patterns for more accurate cost estimates
+
+version: 0.1
+
+# ALB usage patterns
+resource_usage:
+  # Application Load Balancer usage
+  aws_lb:
+    # Processed bytes per month (GB)
+    processed_bytes_gb: 100  # Conservative estimate for dev/test
+    
+  # NAT Gateway usage  
+  aws_nat_gateway:
+    # Monthly data processed (GB)
+    monthly_data_gb: 50  # Conservative estimate
+    
+  # ECS Fargate usage patterns by environment
+  aws_ecs_service:
+    # Development environment (lower utilization)
+    dev:
+      monthly_cpu_hours: 720      # ~1 month continuous running
+      monthly_memory_gb_hours: 1440  # 2GB RAM for 720 hours
+      
+    # Staging environment (moderate utilization)  
+    stg:
+      monthly_cpu_hours: 1440     # ~2 months equivalent
+      monthly_memory_gb_hours: 2880  # 2GB RAM for 1440 hours
+      
+    # Production environment (high utilization)
+    prd:
+      monthly_cpu_hours: 2160     # ~3 months equivalent 
+      monthly_memory_gb_hours: 4320  # 2GB RAM for 2160 hours
+
+  # CloudWatch Logs usage
+  aws_cloudwatch_log_group:
+    # Monthly ingested data (GB)
+    monthly_ingested_gb: 10
+    # Monthly stored data (GB) 
+    monthly_stored_gb: 5
+    
+  # S3 usage for state files and logs
+  aws_s3_bucket:
+    # Storage usage (GB per month)
+    storage_gb: 1
+    # Monthly requests (thousands)
+    monthly_tier_1_requests: 1  # PUT, COPY, POST, LIST
+    monthly_tier_2_requests: 10  # GET, SELECT
+    
+  # Route53 usage
+  aws_route53_zone:
+    # Monthly queries (millions)
+    monthly_queries: 0.1  # 100k queries/month
+    
+  # ACM Certificate (free for AWS resources)
+  aws_acm_certificate:
+    # No additional costs for AWS-integrated certificates
+
+# Instance type specifications for cost calculation
+instance_types:
+  # ECS Fargate pricing (built-in to Infracost)
+  fargate:
+    cpu_cost_per_vcpu_hour: 0.04048
+    memory_cost_per_gb_hour: 0.004445
+    
+# Regional pricing (us-east-1 default)
+region: us-east-1
+
+# Tags for cost attribution
+default_tags:
+  Environment: "{{ .Environment }}"
+  Project: "GamePlatform"
+  ManagedBy: "terraform"
